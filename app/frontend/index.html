@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fake Job Detector</title>
+  <link rel="stylesheet" href="../static/css/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Fake Job Detector</h1>
+    <p>Paste a job description and get a prediction.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <form id="predict-form">
+        <label for="description">Job Description</label>
+        <textarea id="description" rows="10" placeholder="Paste job description here..." required></textarea>
+        <div class="counter" id="char-counter">0 characters</div>
+
+        <div class="grid">
+          <div>
+            <label for="company">Company (optional)</label>
+            <input id="company" type="text" maxlength="200" />
+          </div>
+          <div>
+            <label for="location">Location (optional)</label>
+            <input id="location" type="text" maxlength="200" />
+          </div>
+          <div>
+            <label for="salary">Salary (optional)</label>
+            <input id="salary" type="text" maxlength="200" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="submit-btn">Submit</button>
+          <button type="button" id="clear-btn">Clear</button>
+          <button type="button" id="example-btn">Load Example</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="result-card" hidden>
+      <h2>Result</h2>
+      <div id="result-label" class="badge">—</div>
+      <div id="confidence">Confidence: —</div>
+      <div id="processing">Processing time: — ms</div>
+      <div id="timestamp">Timestamp: —</div>
+      <div id="warning" class="warning" hidden>Warning: low confidence. Review carefully.</div>
+
+      <hr />
+      <h3>Flag This Post</h3>
+      <form id="flag-form">
+        <label for="reason">Reason</label>
+        <select id="reason">
+          <option value="suspicious_contact">Suspicious contact</option>
+          <option value="too_good_to_be_true">Too good to be true</option>
+          <option value="phishing">Phishing</option>
+          <option value="other">Other</option>
+        </select>
+        <label for="comments">Comments</label>
+        <textarea id="comments" rows="4" placeholder="Additional details..."></textarea>
+        <label for="email">Your Email (optional)</label>
+        <input id="email" type="email" placeholder="name@example.com" />
+        <div class="actions">
+          <button type="submit" id="flag-btn">Flag</button>
+        </div>
+        <div id="flag-status" class="status" hidden></div>
+      </form>
+    </section>
+
+    <div id="loading" class="loading" hidden>Processing…</div>
+    <div id="error" class="error" hidden></div>
+  </main>
+
+  <footer>
+    <small>Milestone 3 — Web App Integration</small>
+  </footer>
+
+  <script src="../static/js/app.js"></script>
+</body>
+</html>

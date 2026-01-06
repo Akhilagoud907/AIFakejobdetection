@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fake Job Detector — Admin</title>
+  <link rel="stylesheet" href="../static/css/styles.css" />
+</head>
+<body class="admin">
+  <header class="admin-header">
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Monitor predictions, flags, and manage the model.</p>
+    </div>
+    <div id="user-chip" class="chip" hidden>
+      <span id="user-email">—</span>
+      <button id="logout-btn" class="secondary">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card login-section" id="login-card">
+      <h2 id="form-title">Admin Login</h2>
+      <p id="form-subtitle">Enter your credentials to access the dashboard.</p>
+      
+      <div id="login-form">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" placeholder="name@example.com" />
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" placeholder="Password" />
+        <div class="actions">
+          <button id="login-btn" type="button" class="login-button">Login</button>
+        </div>
+        <p class="toggle-text">Don't have an account? <button id="toggle-signup-btn" type="button" class="link-btn">Sign Up</button></p>
+      </div>
+
+      <div id="signup-form" hidden>
+        <label for="signup-email">Email</label>
+        <input id="signup-email" type="email" placeholder="name@example.com" />
+        <label for="signup-password">Password</label>
+        <input id="signup-password" type="password" placeholder="At least 6 characters" />
+        <label for="signup-password-confirm">Confirm Password</label>
+        <input id="signup-password-confirm" type="password" placeholder="Confirm password" />
+        <div class="actions">
+          <button id="signup-btn" type="button" class="login-button">Sign Up</button>
+        </div>
+        <p class="toggle-text">Already have an account? <button id="toggle-login-btn" type="button" class="link-btn">Login</button></p>
+      </div>
+
+      <div id="login-error" class="error" hidden></div>
+    </section>
+
+    <section class="card" id="dashboard" hidden>
+      <div class="grid cards">
+        <div class="stat">
+          <div class="label">Total Predictions</div>
+          <div class="value" id="stat-total">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">Fake</div>
+          <div class="value bad" id="stat-fake">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">Real</div>
+          <div class="value good" id="stat-real">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">Flags (pending)</div>
+          <div class="value warn" id="stat-pending">—</div>
+        </div>
+      </div>
+
+      <div class="grid charts">
+        <div class="chart-card">
+          <canvas id="chart-distribution"></canvas>
+        </div>
+        <div class="chart-card">
+          <canvas id="chart-trend"></canvas>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div>
+          <button id="refresh-btn" class="secondary">Refresh</button>
+          <button id="retrain-btn" class="secondary">Retrain Model</button>
+        </div>
+        <div class="exports">
+          <input id="start-date" type="datetime-local" aria-label="Start" placeholder="Start Date" title="Select start date and time" />
+          <input id="end-date" type="datetime-local" aria-label="End" placeholder="End Date" title="Select end date and time" />
+          <button id="export-predictions" class="secondary">Export Predictions CSV</button>
+          <button id="export-flags" class="secondary">Export Flags CSV</button>
+          <button id="export-report" class="secondary">PDF Report</button>
+        </div>
+      </div>
+
+      <h3>Flagged Posts</h3>
+      <div class="table-wrapper">
+        <table id="flags-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Prediction</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Confidence</th>
+              <th>Timestamp</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3>Recent Activity</h3>
+      <div class="table-wrapper">
+        <table id="activity-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Prediction</th>
+              <th>Confidence</th>
+              <th>Latency</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="../static/js/admin.js"></script>
+</body>
+</html>

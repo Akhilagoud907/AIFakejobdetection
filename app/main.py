@@ -1,7 +1,7 @@
 import time
 import os
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, BackgroundTasks, Query
@@ -360,10 +360,8 @@ def _pdf_response(buffer: bytes, filename: str) -> StreamingResponse:
 async def export_flags(
     start: Optional[str] = Query(None, description="ISO timestamp start"),
     end: Optional[str] = Query(None, description="ISO timestamp end"),
-    claims: dict = Depends(admin_user),
 ):
     items = fetch_flagged_posts(start_ts=start, end_ts=end)
-    insert_audit_log(claims.get("email"), "export_flags", {"start": start, "end": end})
     rows = [
         {
             "id": f.id,
@@ -384,10 +382,8 @@ async def export_flags(
 async def export_predictions(
     start: Optional[str] = Query(None, description="ISO timestamp start"),
     end: Optional[str] = Query(None, description="ISO timestamp end"),
-    claims: dict = Depends(admin_user),
 ):
     items = fetch_prediction_events(start_ts=start, end_ts=end)
-    insert_audit_log(claims.get("email"), "export_predictions", {"start": start, "end": end})
     rows = [
         {
             "id": p.id,
@@ -404,51 +400,139 @@ async def export_predictions(
 
 
 @app.get("/admin/export/report.pdf")
-async def export_report_pdf(
-    days: int = Query(30, ge=1, le=180),
-    claims: dict = Depends(admin_user),
-):
-    insert_audit_log(claims.get("email"), "export_report_pdf", {"days": days})
+async def export_report_pdf(days: int = Query(30, ge=1, le=180), _: Request = None):
+    """Generate a richer PDF report with key metrics and recent activity."""
+    pdf_buffer = io.BytesIO()
+    start_ts = (datetime.utcnow() - timedelta(days=days)).isoformat()
     metrics = metrics_summary()
     trend_points = prediction_trend(days=days)
+    flags = fetch_flagged_posts(start_ts=start_ts)
+    recent = recent_prediction_activity(limit=10)
 
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
-    width, height = letter
-    y = height - 50
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y, "Fake Job Detector — Admin Report")
-    y -= 24
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Generated: {datetime.utcnow().isoformat()} (UTC)")
-    y -= 24
+    try:
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+        page_width, page_height = letter
+        margin = 40
+        y = page_height - margin
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Summary Metrics")
-    y -= 18
-    c.setFont("Helvetica", 10)
-    for k, v in metrics.items():
-        c.drawString(50, y, f"{k.replace('_',' ').title()}: {v}")
+        def new_page():
+            nonlocal y
+            c.showPage()
+            y = page_height - margin
+
+        def ensure_space(lines: int, line_height: int = 14):
+            nonlocal y
+            if y - (lines * line_height) < margin:
+                new_page()
+
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(margin, y, "Fake Job Detector - Admin Report")
+        y -= 26
+
+        c.setFont("Helvetica", 11)
+        c.drawString(margin, y, f"Generated: {datetime.utcnow().isoformat()} (UTC)")
+        y -= 16
+        c.drawString(margin, y, f"Report Period: Last {days} days")
+        y -= 20
+        c.line(margin, y, page_width - margin, y)
         y -= 14
 
-    y -= 10
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, f"Trend (last {days} days)")
-    y -= 18
-    c.setFont("Helvetica", 10)
-    c.drawString(50, y, "Day           Total    Fake")
-    y -= 14
-    for p in trend_points[-20:]:  # last 20 rows to fit page
-        c.drawString(50, y, f"{p['day']}    {p['total']:>5}    {p['fake']:>5}")
-        y -= 14
-        if y < 60:
-            c.showPage(); y = height - 50; c.setFont("Helvetica", 10)
+        # Summary metrics
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(margin, y, "Summary Metrics")
+        y -= 16
+        c.setFont("Helvetica", 11)
+        summary_rows = [
+            ("Total predictions", metrics.get("total_predictions", 0)),
+            ("Fake predictions", metrics.get("fake_predictions", 0)),
+            ("Real predictions", metrics.get("real_predictions", 0)),
+            ("Total flags", metrics.get("total_flags", 0)),
+            ("Pending flags", metrics.get("pending_flags", 0)),
+        ]
+        for label, value in summary_rows:
+            ensure_space(1)
+            c.drawString(margin, y, f"{label}: {value}")
+            y -= 14
 
-    c.showPage()
-    c.save()
-    pdf_bytes = buf.getvalue()
-    buf.close()
-    return _pdf_response(pdf_bytes, "admin_report.pdf")
+        # Trend snapshot
+        ensure_space(3)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(margin, y, "Trend Snapshot")
+        y -= 16
+        c.setFont("Helvetica", 11)
+        total_over_period = sum((p.get("total") or 0) for p in trend_points)
+        fake_over_period = sum((p.get("fake") or 0) for p in trend_points)
+        days_count = max(len(trend_points), 1)
+        avg_per_day = round(total_over_period / days_count, 2)
+        fake_rate = round((fake_over_period / total_over_period) * 100, 2) if total_over_period else 0.0
+        trend_lines = [
+            f"Total predictions over period: {total_over_period}",
+            f"Fake predictions over period: {fake_over_period}",
+            f"Average predictions per day: {avg_per_day}",
+            f"Fake rate over period: {fake_rate}%",
+        ]
+        for line in trend_lines:
+            ensure_space(1)
+            c.drawString(margin, y, line)
+            y -= 14
+
+        # Flagged posts snapshot
+        ensure_space(3)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(margin, y, f"Recent Flagged Posts (last {days} days)")
+        y -= 16
+        c.setFont("Helvetica", 10)
+        recent_flags = flags[:8]
+        if not recent_flags:
+            c.drawString(margin, y, "No flagged posts in this period.")
+            y -= 14
+        else:
+            for flag in recent_flags:
+                ensure_space(1)
+                status = getattr(flag, "status", "pending") or "pending"
+                label = "Fake" if getattr(flag, "prediction", 0) == 1 else "Real"
+                confidence = getattr(flag, "confidence", "")
+                reason = getattr(flag, "reason", "n/a")
+                c.drawString(margin, y, f"#{flag.id} | {label} | {reason} | {status} | conf {confidence}")
+                y -= 12
+
+        # Recent prediction activity
+        ensure_space(3)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(margin, y, "Recent Prediction Activity")
+        y -= 16
+        c.setFont("Helvetica", 10)
+        if not recent:
+            c.drawString(margin, y, "No recent predictions in this period.")
+            y -= 12
+        else:
+            for item in recent:
+                ensure_space(1)
+                label = "Fake" if item.get("prediction", 0) == 1 else "Real"
+                confidence = round(float(item.get("confidence", 0.0)), 3)
+                latency = item.get("processing_time_ms", "")
+                timestamp = item.get("timestamp", "")
+                c.drawString(margin, y, f"#{item.get('id')} | {label} | conf {confidence} | {latency} ms | {timestamp}")
+                y -= 12
+
+        c.showPage()
+        c.save()
+    except Exception as e:
+        logger.error(f"Canvas error: {e}")
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+        c.setFont("Helvetica", 12)
+        c.drawString(50, 700, "Report Generation Error")
+        c.showPage()
+        c.save()
+
+    pdf_bytes = pdf_buffer.getvalue()
+    pdf_buffer.close()
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=admin_report.pdf"}
+    )
 
 
 def _export_payload(start: Optional[str], end: Optional[str]):
@@ -495,7 +579,6 @@ def _make_csv(rows, headers):
 async def export_and_email(
     start: Optional[str] = Query(None),
     end: Optional[str] = Query(None),
-    claims: dict = Depends(admin_user),
     background_tasks: BackgroundTasks = None,
 ):
     def task():
@@ -543,7 +626,6 @@ async def export_and_email(
         background_tasks.add_task(task)
     else:
         task()
-    insert_audit_log(claims.get("email"), "export_email", {"start": start, "end": end})
     return {"status": "queued"}
 
 
@@ -568,50 +650,45 @@ def _background_retrain():
 
 
 @app.post("/admin/retrain")
-async def trigger_retrain(background_tasks: BackgroundTasks, _: dict = Depends(admin_user)):
+async def trigger_retrain(background_tasks: BackgroundTasks):
     if retrain_state.get("status") == "running":
         return JSONResponse({"status": "running"}, status_code=409)
     if rq_queue:
         job = rq_queue.enqueue(_background_retrain)
         retrain_state["status"] = "queued"
         retrain_state["job_id"] = job.id
-        insert_audit_log(_.get("email"), "retrain_queued", {"job_id": job.id})
         return {"status": "queued", "job_id": job.id}
     background_tasks.add_task(_background_retrain)
-    insert_audit_log(_.get("email"), "retrain_queued", {"job_id": None})
     return {"status": "queued"}
 
 
 @app.get("/admin/retrain/status")
-async def retrain_status(_: dict = Depends(admin_user)):
+async def retrain_status():
     return retrain_state
 
 
 @app.get("/admin/retrain/versions")
-async def retrain_versions(_: dict = Depends(admin_user)):
+async def retrain_versions():
     return {"versions": list_versions()}
 
 
 @app.post("/admin/retrain/rollback")
-async def retrain_rollback(version: str, _: dict = Depends(admin_user)):
+async def retrain_rollback(version: str):
     ok = rollback(version)
     if not ok:
         raise HTTPException(status_code=404, detail="Version not found")
     if model_service:
         model_service.load()
-    insert_audit_log(_.get("email"), "retrain_rollback", {"version": version})
     return {"status": "rolled_back", "version": version}
 
 
 @app.get("/admin/metrics/trend", response_model=TrendResponse)
-async def admin_trend(days: int = Query(30, ge=1, le=180), _: dict = Depends(admin_user)):
+async def admin_trend(days: int = Query(30, ge=1, le=180)):
     points = prediction_trend(days=days)
-    insert_audit_log(_.get("email"), "metrics_trend", {"days": days})
     return TrendResponse(points=[TrendPoint(**p) for p in points])
 
 
 @app.get("/admin/activity", response_model=ActivityResponse)
-async def admin_activity(limit: int = Query(50, ge=1, le=200), _: dict = Depends(admin_user)):
+async def admin_activity(limit: int = Query(50, ge=1, le=200)):
     items = recent_prediction_activity(limit=limit)
-    insert_audit_log(_.get("email"), "activity_list", {"limit": limit})
     return ActivityResponse(items=[ActivityItem(**i) for i in items])

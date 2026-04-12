@@ -113,6 +113,46 @@ docker build -t fake-job-detector .
 docker run -p 8000:8000 fake-job-detector
 ```
 
+## Deploy (Render) - Live Link
+This project can run as a single Render web service (API + frontend together).
+
+1. Push this repository to GitHub.
+2. In Render, go to **New +** -> **Blueprint**.
+3. Select this repo and branch (`main`).
+4. Render reads `render.yaml` and deploys automatically.
+5. Open:
+	- `https://<your-service-name>.onrender.com/`
+	- `https://<your-service-name>.onrender.com/admin`
+
+### Render Environment Variables
+- `IP_HASH_SALT`: random long string (required)
+- `CORS_ALLOW_ORIGINS`: your deployed domain, for example `https://<your-service-name>.onrender.com`
+- `FIREBASE_PROJECT_ID`: your Firebase project id (recommended)
+- `FIREBASE_CREDENTIALS`: path to Firebase admin JSON secret file (example `/etc/secrets/firebase-admin.json`)
+
+### Important deployment note
+Admin metrics/migration helpers currently use SQLite-specific queries. For this repo, deploy with SQLite on persistent disk (configured in `render.yaml`) instead of Postgres.
+
+## Deploy (Railway) - Recommended Alternative
+If Render service is suspended, Railway is usually the quickest stable option for this app.
+
+1. Push the latest code to GitHub.
+2. Create a new project in Railway and choose **Deploy from GitHub repo**.
+3. Railway will detect `railway.json` and run the app with Uvicorn.
+4. In Railway Variables, add:
+	- `DB_PATH=/data/app.db`
+	- `IP_HASH_SALT=<random-long-string>`
+	- `CORS_ALLOW_ORIGINS=<your-railway-domain>`
+	- `FIREBASE_PROJECT_ID=<your-project-id>`
+	- `FIREBASE_CREDENTIALS=<path-to-mounted-json>` if using mounted secret file
+5. Add a Railway Volume and mount it at `/data` so SQLite persists.
+6. Open the generated domain:
+	- `/` for public UI
+	- `/admin` for admin UI
+
+### Vercel note
+Vercel serverless is not ideal for this repository in its current form because local SQLite is ephemeral between invocations. Use Railway/Render/Fly for a persistent app server.
+
 ## Notes
 - Response includes classification, confidence (0-100%), processing time, and timestamp.
 - Low-confidence results (< 60%) show a warning in the UI.
